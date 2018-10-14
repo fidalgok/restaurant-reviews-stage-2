@@ -1,7 +1,7 @@
 import DBHelper from './dbhelper';
 import idb from 'idb';
 //var DBHelper = require('./dbhelper.js');
-import './../css/sass/main.scss';
+
 import * as L from 'leaflet';
 
 let restaurants, neighborhoods, cuisines;

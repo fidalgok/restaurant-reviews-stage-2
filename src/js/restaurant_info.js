@@ -1,6 +1,6 @@
 // import DBHelper from './dbhelper';
 import DBHelper from './dbhelper.js';
-import './../css/sass/main.scss';
+
 let restaurant;
 var map;
 
