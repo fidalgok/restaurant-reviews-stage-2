@@ -60,3 +60,9 @@ typings/
 
 # next.js build output
 .next
+
+#ignore dist, it's built from our build tasks
+dist/
+
+#ignore file with api keys
+src/js/secret.js
