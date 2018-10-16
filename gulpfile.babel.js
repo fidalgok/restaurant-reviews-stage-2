@@ -3,7 +3,6 @@ import responsive from 'gulp-responsive';
 import del from 'del';
 import newer from 'gulp-newer';
 import runSequence from 'run-sequence';
-import babelify from 'babelify';
 import assign from 'lodash/assign';
 import browserify from 'browserify';
 import watchify from 'watchify';
@@ -14,14 +13,15 @@ import mergeStream from 'merge-stream';
 import sourcemaps from 'gulp-sourcemaps';
 import c from 'ansi-colors';
 import sass from 'gulp-sass';
+import compression from 'compression';
 
 const browserSync = require('browser-sync').create();
 
 // Add src and dest paths to files you will handle in tasks here. For js files, also add bundles to create
 const paths = {
   responsive: {
-    src: 'src/src_img/**/*.jpg',
-    dest: 'dist/img/',
+    src: 'src/images/**/*.jpg',
+    dest: 'dist/images/',
   },
   sass: {
     src: 'src/css/sass/**/*.scss',
@@ -68,17 +68,17 @@ gulp.task('responsive:images', function() {
           {
             width: 800,
             quality: 70,
-            rename: { suffix: '-md-1x' },
+            rename: { suffix: '-800-md-1x' },
           },
           {
             width: 600,
             quality: 50,
-            rename: { suffix: '-sm-2x' },
+            rename: { suffix: '-600-sm-2x' },
           },
           {
             width: 300,
             quality: 40,
-            rename: { suffix: '-sm-1x' },
+            rename: { suffix: '-300-sm-1x' },
           },
         ],
       })
@@ -121,6 +121,7 @@ gulp.task('sync', ['build'], function() {
     port: 8080,
     server: {
       baseDir: './dist',
+      middleware: compression(),
     },
   });
 
@@ -156,7 +157,10 @@ function createBundle(src) {
   var opts = assign({}, watchify.args, customOpts);
   var b = watchify(browserify(opts));
 
-  b.transform('babelify', { presets: ['@babel/preset-env'] });
+  b.transform('babelify', {
+    presets: [['@babel/preset-env', { useBuiltIns: 'usage' }]],
+    plugins: ['@babel/plugin-transform-regenerator'],
+  });
 
   b.on('log', log);
   return b;

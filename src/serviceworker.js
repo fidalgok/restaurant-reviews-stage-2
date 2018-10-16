@@ -1,15 +1,20 @@
 //console.log('from service worker: successfully registered');
 const cacheVersion = 'restaurant-reviews-v2-';
 const restaurantImagesCache = 'restaurant-images';
+const restaurantIconsCache = 'restaurant-icons';
 const urlsToCache = [
   '/',
-  '/dist/main.js',
-  '/dist/restaurant_info.js',
-  '/js/dbhelper.js',
-  '/css/styles.css',
-  '/restaurant.html'
+  '/js/main.js',
+  '/js/restaurant_info.js',
+  '/manifest.json',
+  '/css/main.css',
+  '/restaurant.html',
 ];
-const cacheWhitelist = [`${cacheVersion}skeleton`, restaurantImagesCache];
+const cacheWhitelist = [
+  `${cacheVersion}skeleton`,
+  restaurantImagesCache,
+  restaurantIconsCache,
+];
 
 self.addEventListener('install', event => {
   //open a cache
@@ -24,15 +29,6 @@ self.addEventListener('install', event => {
         console.log(err);
       }
     })()
-    // caches
-    //   .open(cacheVersion + 'skeleton')
-    //   .then(cache => {
-    //     console.log(`opened cache`);
-    //     return cache.addAll(urlsToCache);
-    //   })
-    //   .catch(err => {
-    //     console.log(`caching failed with: ${err}`);
-    //   })
   );
 });
 
@@ -41,12 +37,19 @@ self.addEventListener('fetch', event => {
     //ignore for now
     return;
   }
+
   var requestUrl = new URL(event.request.url);
   if (requestUrl.origin === location.origin) {
     //cache restaurant images
     if (requestUrl.pathname.startsWith('/images/')) {
       //requesting images so cache them
       event.respondWith(serveImages(event.request));
+      return;
+    }
+    //cache app icons
+    if (requestUrl.pathname.startsWith('/images/icons')) {
+      //requesting images so cache them
+      event.respondWith(serveIcons(event.request));
       return;
     }
     if (requestUrl.pathname.startsWith('/restaurant.html')) {
@@ -58,9 +61,11 @@ self.addEventListener('fetch', event => {
       );
     }
   }
+
   //block the fetch and respond with our cache before going to the network
   event.respondWith(
     //match a cache to the request event to one of the urls we've specified
+
     caches
       .match(event.request)
       .then(response => {
@@ -106,6 +111,21 @@ function serveImages(request) {
   //just store the first one that comes back
   var storageUrl = request.url.replace(/-[-\d\w]+\.jpg/, '');
   return caches.open(restaurantImagesCache).then(cache => {
+    return cache.match(storageUrl).then(response => {
+      return (
+        response ||
+        fetch(request).then(response => {
+          cache.put(storageUrl, response.clone());
+          return response;
+        })
+      );
+    });
+  });
+}
+
+function serveIcons(request) {
+  var storageUrl = request.url.replace(/\.png/, '');
+  return caches.open(restaurantIconsCache).then(cache => {
     return cache.match(storageUrl).then(response => {
       return (
         response ||

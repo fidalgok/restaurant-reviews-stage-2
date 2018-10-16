@@ -13,13 +13,26 @@ const initMap = () => {
       // Got an error!
       console.error(error);
     } else {
-      // self.map = .Map(document.getElementById('map'), {
-      //   zoom: 16,
-      //   center: restaurant.latlng,
-      //   scrollwheel: false,
-      // });
+      self.map = L.map('map', {
+        zoom: 16,
+        center: [restaurant.latlng.lat, restaurant.latlng.lng],
+        scrollwheel: false,
+      });
+      L.tileLayer(
+        'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.jpg70?access_token={mapboxToken}',
+        {
+          mapboxToken:
+            'pk.eyJ1Ijoia3lsZS1maWRhbGdvIiwiYSI6ImNqbTd0ODU5dzA1b3EzcW54YnRheDkzMGUifQ.g3ZjhlFEcmPhzVVdon5v-g',
+          maxZoom: 18,
+          attribution:
+            'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+            '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+            'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+          id: 'mapbox.streets',
+        }
+      ).addTo(self.map);
       fillBreadcrumb();
-      //DBHelper.mapMarkerForRestaurant(self.restaurant, self.map);
+      DBHelper.mapMarkerForRestaurant(restaurant, self.map);
     }
   });
 };
@@ -28,7 +41,6 @@ const initMap = () => {
  * Get current restaurant from page URL.
  */
 function fetchRestaurantFromURL(callback) {
-  debugger;
   if (self.restaurant) {
     // restaurant already fetched!
     callback(null, self.restaurant);
@@ -56,7 +68,6 @@ function fetchRestaurantFromURL(callback) {
  * Create restaurant HTML and add it to the webpage
  */
 function fillRestaurantHTML(restaurant = self.restaurant) {
-  debugger;
   const name = document.getElementById('restaurant-name');
   name.innerHTML = restaurant.name;
 
@@ -138,7 +149,6 @@ function createResponsiveImageHtml(imgUrl, restaurant) {
 function fillRestaurantHoursHTML(
   operatingHours = self.restaurant.operating_hours
 ) {
-  debugger;
   const hours = document.getElementById('restaurant-hours');
   for (let key in operatingHours) {
     const row = document.createElement('tr');
@@ -220,7 +230,6 @@ function fillBreadcrumb(restaurant = self.restaurant) {
  * Get a parameter by name from page URL.
  */
 function getParameterByName(name, url) {
-  debugger;
   if (!url) url = window.location.href;
   name = name.replace(/[\[\]]/g, '\\$&');
   const regex = new RegExp(`[?&]${name}(=([^&#]*)|&|#|$)`),

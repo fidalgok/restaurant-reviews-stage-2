@@ -1,8 +1,4 @@
 import DBHelper from './dbhelper';
-import idb from 'idb';
-//var DBHelper = require('./dbhelper.js');
-
-import * as L from 'leaflet';
 
 let restaurants, neighborhoods, cuisines;
 var initMap, newMap;
@@ -12,13 +8,13 @@ var markers = [];
  * Fetch all neighborhoods and set their HTML.
  */
 function fetchNeighborhoods() {
-  DBHelper.fetchNeighborhoods((error, neighborhoods) => {
+  DBHelper.fetchNeighborhoods((error, foundNeighborhoods) => {
     if (error) {
       // Got an error
       console.log('error getting neighborhoods', error);
     } else {
-      self.neighborhoods = neighborhoods;
-      fillNeighborhoodsHTML();
+      neighborhoods = foundNeighborhoods;
+      fillNeighborhoodsHTML(neighborhoods);
     }
   });
 }
@@ -26,7 +22,7 @@ function fetchNeighborhoods() {
 /**
  * Set neighborhoods HTML.
  */
-function fillNeighborhoodsHTML(neighborhoods = self.neighborhoods) {
+function fillNeighborhoodsHTML(neighborhoods) {
   const select = document.getElementById('neighborhoods-select');
   select.addEventListener('change', updateRestaurants);
   if (select.querySelectorAll('option').length > 1) return;
@@ -47,8 +43,7 @@ function fetchCuisines() {
       // Got an error!
       console.error('error getting cuisines', error);
     } else {
-      self.cuisines = cuisines;
-      fillCuisinesHTML();
+      fillCuisinesHTML(cuisines);
     }
   });
 }
@@ -56,7 +51,7 @@ function fetchCuisines() {
 /**
  * Set cuisines HTML.
  */
-function fillCuisinesHTML(cuisines = self.cuisines) {
+function fillCuisinesHTML(cuisines) {
   const select = document.getElementById('cuisines-select');
   select.addEventListener('change', updateRestaurants);
   if (select.querySelectorAll('option').length > 1) return;
@@ -72,25 +67,28 @@ function fillCuisinesHTML(cuisines = self.cuisines) {
  * Initialize leaflet map, called from HTML.
  */
 initMap = () => {
-  self.newMap = L.map('map', {
-    center: [40.722216, -73.987501],
-    zoom: 12,
-    scrollWheelZoom: false,
-  });
+  if (navigator.onLine) {
+    newMap = L.map('map', {
+      center: [40.722216, -73.987501],
+      zoom: 12,
+      scrollWheelZoom: false,
+    });
 
-  L.tileLayer(
-    'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.jpg70?access_token={mapboxToken}',
-    {
-      mapboxToken:
-        'pk.eyJ1Ijoia3lsZS1maWRhbGdvIiwiYSI6ImNqbTd0ODU5dzA1b3EzcW54YnRheDkzMGUifQ.g3ZjhlFEcmPhzVVdon5v-g',
-      maxZoom: 18,
-      attribution:
-        'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
-        '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
-        'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
-      id: 'mapbox.streets',
-    }
-  ).addTo(self.newMap);
+    L.tileLayer(
+      'https://api.tiles.mapbox.com/v4/{id}/{z}/{x}/{y}.jpg70?access_token={mapboxToken}',
+      {
+        mapboxToken:
+          'pk.eyJ1Ijoia3lsZS1maWRhbGdvIiwiYSI6ImNqbTd0ODU5dzA1b3EzcW54YnRheDkzMGUifQ.g3ZjhlFEcmPhzVVdon5v-g',
+        maxZoom: 18,
+        attribution:
+          'Map data &copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors, ' +
+          '<a href="https://creativecommons.org/licenses/by-sa/2.0/">CC-BY-SA</a>, ' +
+          'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>',
+        id: 'mapbox.streets',
+      }
+    ).addTo(newMap);
+  }
+
   updateRestaurants();
 };
 
@@ -110,13 +108,16 @@ function updateRestaurants() {
   DBHelper.fetchRestaurantByCuisineAndNeighborhood(
     cuisine,
     neighborhood,
-    (error, restaurants) => {
+    (error, filteredRestaurants) => {
       if (error) {
         // Got an error!
-        console.error('error getting all restaurants', error);
+        console.error(
+          'error getting restaurants by cuisine and neighborhoods',
+          error
+        );
       } else {
-        resetRestaurants(restaurants);
-        fillRestaurantsHTML();
+        resetRestaurants(filteredRestaurants);
+        fillRestaurantsHTML(restaurants);
       }
     }
   );
@@ -125,31 +126,32 @@ function updateRestaurants() {
 /**
  * Clear current restaurants, their HTML and remove their map markers.
  */
-function resetRestaurants(restaurants) {
+function resetRestaurants(filteredRestaurants) {
   // Remove all restaurants
-  self.restaurants = [];
+
+  restaurants = [];
   const ul = document.getElementById('restaurants-list');
   ul.innerHTML = '';
 
   // Remove all map markers
-  if (self.markers) {
-    self.markers.forEach(m => m.remove());
+  if (markers) {
+    markers.forEach(m => m.remove());
   }
-  self.markers = [];
+  markers = [];
 
-  self.restaurants = restaurants;
+  restaurants = filteredRestaurants;
 }
 
 /**
  * Create all restaurants HTML and add them to the webpage.
  */
-function fillRestaurantsHTML(restaurants = self.restaurants) {
+function fillRestaurantsHTML(restaurants) {
   const ul = document.getElementById('restaurants-list');
   if (ul.querySelector('li')) return;
   restaurants.forEach(restaurant => {
     ul.append(createRestaurantHTML(restaurant));
   });
-  addMarkersToMap();
+  navigator.onLine ? addMarkersToMap(restaurants, newMap) : null;
 }
 
 /**
@@ -239,44 +241,46 @@ function createResponsiveImageHtml(imgUrl, restaurant) {
 /**
  * Add markers for current restaurants to the map.
  */
-function addMarkersToMap(restaurants = self.restaurants) {
-  restaurants.forEach(restaurant => {
-    // Add marker to the map
-    const marker = DBHelper.mapMarkerForRestaurant(restaurant, self.map);
-    marker.on('click', onClick);
-    function onClick() {
-      window.location.href = marker.options.url;
-    }
-    self.markers.push(marker);
-  });
+function addMarkersToMap(restaurants = restaurants, map) {
+  if (navigator.onLine) {
+    restaurants.forEach(restaurant => {
+      // Add marker to the map
+      const marker = DBHelper.mapMarkerForRestaurant(restaurant, map);
+      marker.on('click', onClick);
+      function onClick() {
+        window.location.href = marker.options.url;
+      }
+      markers.push(marker);
+    });
+  }
 }
 
 /**
  * Register Service Worker
  */
 
-// if ('navigator' in window) {
-//   self.addEventListener('load', () => {
-//     navigator.serviceWorker
-//       .register('../serviceworker.js')
-//       .then(registration => {
-//         //success
-//         console.log(
-//           `Successfully registered service worker with scope: ${
-//             registration.scope
-//           }`
-//         );
-//       })
-//       .catch(err => {
-//         //something went wrong
-//         console.log(`Service worker registration failed with: ${err}`);
-//       });
-//   });
-// } else {
-//   /**
-//    * Service workers aren't supported, do nothing
-//    */
-// }
+if ('navigator' in window) {
+  self.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('../serviceworker.js')
+      .then(registration => {
+        //success
+        console.log(
+          `Successfully registered service worker with scope: ${
+            registration.scope
+          }`
+        );
+      })
+      .catch(err => {
+        //something went wrong
+        console.log(`Service worker registration failed with: ${err}`);
+      });
+  });
+} else {
+  /**
+   * Service workers aren't supported, do nothing
+   */
+}
 
 /**
  * Fetch neighborhoods and cuisines as soon as the page is loaded.

@@ -13,7 +13,7 @@ function openDatabase() {
   return idb.open('restaurant', 1, upgradeDb => {
     switch (upgradeDb.oldVersion) {
       case 0:
-        const restaurantStore = upgradeDb.createObjectStore('restaurants', {
+        upgradeDb.createObjectStore('restaurants', {
           keyPath: 'id',
         });
     }
@@ -42,12 +42,12 @@ function serveRestaurantsFromCache(callback) {
     })
     .then(
       restaurants => {
-        console.log('served from cache');
-        callback(null, restaurants);
+        // callback(null, restaurants);
 
         return restaurants;
       }, //something went wrong
       () =>
+        //send the error back in the callback
         callback(
           new Error('something went wrong getting restaurants from cache'),
           null
@@ -72,52 +72,48 @@ class DBHelper {
   /**
    * Fetch all restaurants.
    */
-  static fetchRestaurants(callback) {
-    _dbPromise.then(db => {
-      serveRestaurantsFromCache(callback).then(cachedRestaurants => {
-        let xhr = new XMLHttpRequest();
-        xhr.open('GET', DBHelper.DATABASE_URL);
-        xhr.onload = () => {
-          if (xhr.status === 200) {
-            // Got a success response from server!
-            const json = JSON.parse(xhr.responseText);
-            const restaurants = json;
-            //if going to the network for the first time
-            //serve restuarants via call back then
-            //add restaurants returned to the dbstore
-            if (cachedRestaurants.length === 0) {
-              console.log('serving from xhr');
-              callback(null, restaurants);
-            }
+  //refactor fetchRestaurants for fetch and async
+  static async getRestaurants(callback) {
+    try {
+      const db = await _dbPromise;
+      const cachedRestaurants = await serveRestaurantsFromCache(callback);
 
-            _dbPromise.then(db => {
-              var putPromises = restaurants.map(r => {
-                let tx = db.transaction('restaurants', 'readwrite');
-                let restaurantStore = tx.objectStore('restaurants');
+      if (cachedRestaurants && cachedRestaurants.length === 0) {
+        // didn't receive restaurants from cache, send them via fetch,
+        //then proceed to update cache from network
+        const response = await fetch(DBHelper.DATABASE_URL);
+        const restaurants = await response.json();
+        console.log('serving from network fetch');
+        callback(null, restaurants);
 
-                return restaurantStore.put(r);
-                //according to the idb library transaction will autoclose
-                //each time so I don't need to explicitly do so here
-                //i was getting errors saying the transaction had already closed
-                //when I tried to include it in my code.
-              });
+        //update browser db
 
-              Promise.all(putPromises)
-                .then(() => {
-                  console.log('putting restaurants succeeded');
-                  //callback(null, restaurants);
-                })
-                .catch(err => console.log('putting restaurants failed', err));
-            });
-          } else {
-            // Oops!. Got an error from server.
-            const error = `Request failed. Returned status of ${xhr.status}`;
-            callback(error, null);
-          }
-        };
-        xhr.send();
-      });
-    });
+        var putPromises = restaurants.map(r => {
+          let tx = db.transaction('restaurants', 'readwrite');
+          let restaurantStore = tx.objectStore('restaurants');
+
+          return restaurantStore.put(r);
+          //according to the idb library transaction will autoclose
+          //each time so I don't need to explicitly do so here
+          //i was getting errors saying the transaction had already closed
+          //when I tried to include it in my code.
+        });
+
+        Promise.all(putPromises)
+          .then(() => {
+            console.log('putting restaurants succeeded');
+            //callback(null, restaurants);
+          })
+          .catch(err => console.log('putting restaurants failed', err));
+      } else {
+        //otherwise we got restaurants send them from cache
+        console.log('serving from cache');
+        callback(null, cachedRestaurants);
+      }
+    } catch (err) {
+      //something went down above, just return the err
+      return callback(err, null);
+    }
   }
 
   /**
@@ -125,7 +121,7 @@ class DBHelper {
    */
   static fetchRestaurantById(id, callback) {
     // fetch all restaurants with proper error handling.
-    DBHelper.fetchRestaurants((error, restaurants) => {
+    DBHelper.getRestaurants((error, restaurants) => {
       if (error) {
         callback(error, null);
       } else {
@@ -146,7 +142,7 @@ class DBHelper {
    */
   static fetchRestaurantByCuisine(cuisine, callback) {
     // Fetch all restaurants  with proper error handling
-    DBHelper.fetchRestaurants((error, restaurants) => {
+    DBHelper.getRestaurants((error, restaurants) => {
       if (error) {
         callback(error, null);
       } else {
@@ -162,7 +158,7 @@ class DBHelper {
    */
   static fetchRestaurantByNeighborhood(neighborhood, callback) {
     // Fetch all restaurants
-    DBHelper.fetchRestaurants((error, restaurants) => {
+    DBHelper.getRestaurants((error, restaurants) => {
       if (error) {
         callback(error, null);
       } else {
@@ -182,7 +178,7 @@ class DBHelper {
     callback
   ) {
     // Fetch all restaurants
-    DBHelper.fetchRestaurants((error, restaurants) => {
+    DBHelper.getRestaurants((error, restaurants) => {
       if (error) {
         callback(error, null);
       } else {
@@ -205,7 +201,7 @@ class DBHelper {
    */
   static fetchNeighborhoods(callback) {
     // Fetch all restaurants
-    DBHelper.fetchRestaurants((error, restaurants) => {
+    DBHelper.getRestaurants((error, restaurants) => {
       if (error) {
         callback(error, null);
       } else {
@@ -227,7 +223,7 @@ class DBHelper {
    */
   static fetchCuisines(callback) {
     // Fetch all restaurants
-    DBHelper.fetchRestaurants((error, restaurants) => {
+    DBHelper.getRestaurants((error, restaurants) => {
       if (error) {
         callback(error, null);
       } else {
@@ -253,6 +249,8 @@ class DBHelper {
    * Restaurant image URL.
    */
   static imageUrlForRestaurant(restaurant) {
+    //handle missing photos
+    restaurant.photograph = restaurant.photograph || 'restaurant-placeholder';
     return restaurant.photograph;
   }
 
@@ -269,7 +267,7 @@ class DBHelper {
         url: DBHelper.urlForRestaurant(restaurant),
       }
     );
-    marker.addTo(newMap);
+    marker.addTo(map);
     return marker;
   }
 }
